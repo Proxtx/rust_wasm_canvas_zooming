@@ -1,0 +1,16 @@
+[package]
+name = "rust_wasm_canvas_zooming"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+console_error_panic_hook = "0.1.7"
+leptos = { version = "0.6.12", features = ["csr", "nightly"] }
+rand = "0.8.5"
+stylers = { version = "1.0.0-alpha" }
+web-sys = { version = "0.3.69", features = ["TouchList", "DomRect", "CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData"] }
+
+[build-dependencies]
+stylers = {  version = "1.0.0-alpha" }
