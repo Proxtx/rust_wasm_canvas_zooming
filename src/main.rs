@@ -1,13 +1,20 @@
-use std::isize;
+#![feature(let_chains)]
 
+use std::{
+    isize,
+    ops::{Add, Mul, Sub},
+};
+
+use ev::TouchEvent;
 use html::Canvas;
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use logging::log;
 use rand::Rng;
+use std::ops::Deref;
 use stylers::style;
 use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, ImageData};
+use web_sys::{js_sys::Math::pow, CanvasRenderingContext2d, Element, ImageData, TouchList};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -17,7 +24,8 @@ fn main() {
         }
     };
     let (pixel_mat, write_pixel_mat) = create_signal(generate_random_pixel_matrix(100, 100));
-    let (width, write_width) = create_signal(500);
+    let (width, write_width) =
+        create_signal(window().inner_width().unwrap().as_f64().unwrap() as usize);
     let (height, write_height) = create_signal(500);
     mount_to_body(move || {
         view! { class=stl, <PixelView pixels=pixel_mat canvas_width=width canvas_height=height/> }
@@ -94,8 +102,71 @@ fn PixelView(
         }
     });
 
+    let (last_touches, write_last_touches) = create_signal::<Option<Vec<Vector>>>(None);
+
+    let canvas_start_touches = move |e: TouchEvent| {
+        let touches = convert_touch_list_to_canvas_positions(&canvas_ref().unwrap(), &e.touches());
+        write_last_touches(Some(touches));
+    };
+
+    let canvas_apply_movement = move |e: TouchEvent| {
+        let touches = convert_touch_list_to_canvas_positions(&canvas_ref().unwrap(), &e.touches());
+        match touches.len() {
+            0 => {
+                window().alert_with_message("Wtf no sense").unwrap();
+            }
+            1 => {
+                if let Some(v) = last_touches()
+                    && let Some(last_touch) = v.first()
+                {
+                    let movement = &touches[0] - last_touch;
+                    write_transform(&transform() + &movement);
+                }
+            }
+            2 => {
+                e.prevent_default();
+                if let Some(v) = last_touches()
+                    && let Some(first_last_touch) = v.first()
+                    && let Some(second_last_touch) = v.get(1)
+                {
+                    let first_current_touch = touches.first().unwrap();
+                    let second_current_touch = touches.get(1).unwrap();
+
+                    let last_distance = second_last_touch - first_last_touch;
+                    let last_center = first_last_touch + &(&last_distance * 0.5);
+
+                    let current_distance = second_current_touch - first_current_touch;
+                    let current_center = first_current_touch + &(&current_distance * 0.5);
+
+                    let diff = current_distance.len() - last_distance.len();
+                    let percent_grown = diff / (last_distance.len());
+
+                    let center_transform = &(&current_center - &last_center)
+                        - &(&transform() * (percent_grown * scale()));
+                    write_transform(&transform() + &center_transform);
+
+                    write_scale(scale() * (percent_grown + 1.0));
+                }
+            }
+            3.. => {
+                window()
+                    .alert_with_message("3 Finger zoom not allowed. It's a feature")
+                    .unwrap();
+            }
+        }
+
+        write_last_touches(Some(touches.clone()));
+    };
+
     view! {
-        <canvas ref=canvas_ref width=canvas_width height=canvas_height></canvas>
+        <canvas
+            ref=canvas_ref
+            width=canvas_width
+            height=canvas_height
+            on:touchmove=canvas_apply_movement
+            on:touchstart=canvas_start_touches
+            on:touchend=move |_| { write_last_touches(None) }
+        ></canvas>
         <button on:click=move |_| {
             write_scale.update(|v: &mut f32| { *v += 0.1 })
         }>UpScale</button>
@@ -105,10 +176,63 @@ fn PixelView(
     }
 }
 
+fn convert_touch_list_to_canvas_positions(
+    canvas_element: &Element,
+    touches: &TouchList,
+) -> Vec<Vector> {
+    let mut out = Vec::new();
+    let client_rect = canvas_element.get_bounding_client_rect();
+    for touch_index in 0..touches.length() {
+        let touch = touches.get(touch_index).unwrap();
+        let hector = Vector {
+            y: client_rect.top() as isize - touch.page_y() as isize,
+            x: client_rect.left() as isize - touch.page_x() as isize,
+        };
+        out.push(hector);
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Vector {
     pub x: isize,
     pub y: isize,
+}
+
+impl Add for &Vector {
+    type Output = Vector;
+    fn add(self, rhs: Self) -> Self::Output {
+        Vector {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Sub for &Vector {
+    type Output = Vector;
+    fn sub(self, rhs: Self) -> Self::Output {
+        Vector {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+}
+
+impl Mul<f32> for &Vector {
+    type Output = Vector;
+    fn mul(self, rhs: f32) -> Self::Output {
+        Vector {
+            x: (self.x as f32 * rhs) as isize,
+            y: (self.y as f32 * rhs) as isize,
+        }
+    }
+}
+
+impl Vector {
+    fn len(&self) -> f32 {
+        ((self.x.pow(2) + self.y.pow(2)) as f32).sqrt()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
