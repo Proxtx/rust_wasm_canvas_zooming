@@ -38,7 +38,7 @@ fn generate_random_pixel_matrix(width: usize, height: usize) -> PixelMatrix {
     for x in 0..width {
         output.push(Vec::new());
         for _y in 0..height {
-            if x == width - 1 {
+            if x == 0 {
                 output[x].push(Color {
                     r: 255,
                     g: 0,
@@ -79,7 +79,7 @@ fn PixelView(
     };
 
     let (scale, write_scale) = create_signal(4.0);
-    let (transform, write_transform) = create_signal(Vector { x: -1, y: -1 });
+    let (transform, write_transform) = create_signal(Vector { x: -1.0, y: -1.0 });
 
     create_effect(move |_| {
         if let Some(ctx) = ctx() {
@@ -119,8 +119,8 @@ fn PixelView(
                 if let Some(v) = last_touches()
                     && let Some(last_touch) = v.first()
                 {
-                    let movement = &touches[0] - last_touch;
-                    write_transform(&transform() + &movement);
+                    let movement = touches[0] - *last_touch;
+                    write_transform(transform() + movement);
                 }
             }
             2 => {
@@ -132,20 +132,24 @@ fn PixelView(
                     let first_current_touch = touches.first().unwrap();
                     let second_current_touch = touches.get(1).unwrap();
 
-                    let last_distance = second_last_touch - first_last_touch;
-                    let last_center = first_last_touch + &(&last_distance * 0.5);
+                    let last_distance = *second_last_touch - *first_last_touch;
+                    let last_center = *first_last_touch + (last_distance * 0.5);
 
-                    let current_distance = second_current_touch - first_current_touch;
-                    let current_center = first_current_touch + &(&current_distance * 0.5);
+                    let current_distance = *second_current_touch - *first_current_touch;
+                    let current_center = *first_current_touch + (current_distance * 0.5);
 
                     let diff = current_distance.len() - last_distance.len();
                     let percent_grown = diff / (last_distance.len());
 
-                    let center_transform = &(&current_center - &last_center)
-                        - &(&transform() * (percent_grown * scale()));
-                    write_transform(&transform() + &center_transform);
+                    let new_scale = scale() * (percent_grown + 1.0);
 
-                    write_scale(scale() * (percent_grown + 1.0));
+                    write_transform(
+                        transform() - ((current_center - transform()) * (percent_grown))
+                            + current_center
+                            - last_center,
+                    );
+
+                    write_scale(new_scale);
                 }
             }
             3.. => {
@@ -171,7 +175,7 @@ fn PixelView(
             write_scale.update(|v: &mut f32| { *v += 0.1 })
         }>UpScale</button>
         <button on:click=move |_| {
-            write_transform.update(|v: &mut Vector| v.x += 1)
+            write_transform.update(|v: &mut Vector| v.x += 1.0)
         }>Left</button>
     }
 }
@@ -185,8 +189,8 @@ fn convert_touch_list_to_canvas_positions(
     for touch_index in 0..touches.length() {
         let touch = touches.get(touch_index).unwrap();
         let hector = Vector {
-            y: client_rect.top() as isize - touch.page_y() as isize,
-            x: client_rect.left() as isize - touch.page_x() as isize,
+            y: client_rect.top() as f32 - touch.page_y() as f32,
+            x: client_rect.left() as f32 - touch.page_x() as f32,
         };
         out.push(hector);
     }
@@ -195,11 +199,11 @@ fn convert_touch_list_to_canvas_positions(
 
 #[derive(Debug, Clone, Copy)]
 struct Vector {
-    pub x: isize,
-    pub y: isize,
+    pub x: f32,
+    pub y: f32,
 }
 
-impl Add for &Vector {
+impl Add for Vector {
     type Output = Vector;
     fn add(self, rhs: Self) -> Self::Output {
         Vector {
@@ -209,7 +213,7 @@ impl Add for &Vector {
     }
 }
 
-impl Sub for &Vector {
+impl Sub for Vector {
     type Output = Vector;
     fn sub(self, rhs: Self) -> Self::Output {
         Vector {
@@ -219,19 +223,19 @@ impl Sub for &Vector {
     }
 }
 
-impl Mul<f32> for &Vector {
+impl Mul<f32> for Vector {
     type Output = Vector;
     fn mul(self, rhs: f32) -> Self::Output {
         Vector {
-            x: (self.x as f32 * rhs) as isize,
-            y: (self.y as f32 * rhs) as isize,
+            x: self.x * rhs,
+            y: self.y * rhs,
         }
     }
 }
 
 impl Vector {
     fn len(&self) -> f32 {
-        ((self.x.pow(2) + self.y.pow(2)) as f32).sqrt()
+        (self.x.powf(2.0) + self.y.powf(2.0)).sqrt()
     }
 }
 
@@ -254,11 +258,12 @@ fn generate_image_data(
     for canvas_x in 0..canvas_width {
         for canvas_y in 0..canvas_height {
             let corresponding_source_pixel = Vector {
-                x: ((canvas_x as isize + transform.x) as f32 / scale).floor() as isize,
-                y: ((canvas_y as isize + transform.y) as f32 / scale).floor() as isize,
+                x: ((canvas_x as f32 + transform.x) / scale).floor(),
+                y: ((canvas_y as f32 + transform.y) / scale).floor(),
             };
-            let color = match (corresponding_source_pixel.x, corresponding_source_pixel.y) {
-                (..=-1, _) | (_, ..=-1) => &Color {
+            let (x, y) = (corresponding_source_pixel.x, corresponding_source_pixel.y);
+            let color = match (x, y) {
+                (..0.0, _) | (_, ..0.0) => &Color {
                     r: 0,
                     g: 0,
                     b: 0,
@@ -286,8 +291,8 @@ fn generate_image_data(
                 &mut image_buffer,
                 canvas_width,
                 Vector {
-                    x: canvas_x as isize,
-                    y: canvas_y as isize,
+                    x: canvas_x as f32,
+                    y: canvas_y as f32,
                 },
                 color,
             )
@@ -297,7 +302,7 @@ fn generate_image_data(
 }
 
 fn write_image_buffer(buffer: &mut [u8], canvas_width: usize, position: Vector, color: &Color) {
-    let start = canvas_width * 4 * position.y as usize + 4 * position.x as usize;
+    let start = canvas_width * 4 * position.y.floor() as usize + 4 * position.x.floor() as usize;
     buffer[start] = color.r;
     buffer[start + 1] = color.g;
     buffer[start + 2] = color.b;
