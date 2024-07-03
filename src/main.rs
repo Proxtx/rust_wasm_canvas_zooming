@@ -26,7 +26,8 @@ fn main() {
     let (pixel_mat, write_pixel_mat) = create_signal(generate_random_pixel_matrix(100, 100));
     let (width, write_width) =
         create_signal(window().inner_width().unwrap().as_f64().unwrap() as usize);
-    let (height, write_height) = create_signal(500);
+    let (height, write_height) =
+        create_signal(window().inner_height().unwrap().as_f64().unwrap() as usize);
     mount_to_body(move || {
         view! { class=stl, <PixelView pixels=pixel_mat canvas_width=width canvas_height=height/> }
     })
@@ -171,12 +172,6 @@ fn PixelView(
             on:touchstart=canvas_start_touches
             on:touchend=move |_| { write_last_touches(None) }
         ></canvas>
-        <button on:click=move |_| {
-            write_scale.update(|v: &mut f32| { *v += 0.1 })
-        }>UpScale</button>
-        <button on:click=move |_| {
-            write_transform.update(|v: &mut Vector| v.x += 1.0)
-        }>Left</button>
     }
 }
 
