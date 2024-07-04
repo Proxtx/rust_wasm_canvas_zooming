@@ -28,6 +28,11 @@ fn main() {
         create_signal(window().inner_width().unwrap().as_f64().unwrap() as usize);
     let (height, write_height) =
         create_signal(window().inner_height().unwrap().as_f64().unwrap() as usize);
+
+    window_event_listener(resize, move |_| {
+        write_width(window().inner_width().unwrap().as_f64().unwrap() as usize);
+        write_height((window().inner_height().unwrap().as_f64().unwrap() * 0.7) as usize);
+    });
     mount_to_body(move || {
         view! { class=stl, <PixelView pixels=pixel_mat canvas_width=width canvas_height=height/> }
     })
