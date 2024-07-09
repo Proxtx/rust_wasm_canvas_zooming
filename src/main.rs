@@ -85,7 +85,7 @@ fn PixelView(
     };
 
     let (scale, write_scale) = create_signal(4.0);
-    let (transform, write_transform) = create_signal(Vector { x: -1.0, y: -1.0 });
+    let (transform, write_transform) = create_signal(Vector { x: 0, y: 0 });
 
     create_effect(move |_| {
         if let Some(ctx) = ctx() {
@@ -176,7 +176,10 @@ fn PixelView(
             on:touchmove=canvas_apply_movement
             on:touchstart=canvas_start_touches
             on:touchend=move |_| { write_last_touches(None) }
-        ></canvas>
+        ></canvas><button id="reset" on:click=|| {
+            write_scale(4.0);
+            write_transform(Vector { x: 0, y: 0 })
+        }>Reset</button>
     }
 }
 

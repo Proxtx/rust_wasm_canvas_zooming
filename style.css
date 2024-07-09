@@ -1,3 +1,9 @@
 body {
   margin: 0;
 }
+
+#reset {
+  position: absolute;
+  bottom: 5%;
+  right: 5%;
+}
